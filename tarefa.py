@@ -8,181 +8,115 @@ import streamlit as st
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-# ==============================
-# 🔹 Leitura e Exibição Inicial
-# ==============================
-st.title('Análise Descritiva e Clusterização - Online Shoppers Intention')
+sns.set()
 
-df = pd.read_csv('online_shoppers_intention.csv')
-df_copia = df.copy()
 
-st.subheader('Visualização inicial do dataset')
+st.set_page_config(page_title="Análise de Cluster - Online Shoppers", page_icon="🛍️", layout="wide")
+
+
+st.title("Análise de Cluster - Online Shoppers Intention")
+
+df = pd.read_csv("online_shoppers_intention.csv")
+st.write(f"**Dataset carregado com {df.shape[0]} linhas e {df.shape[1]} colunas.**")
+
 st.dataframe(df.head().astype(str))
-st.write(f"**Shape do dataset:** {df.shape[0]} linhas × {df.shape[1]} colunas")
 
-# ==============================
-# 🔹 Análise Descritiva
-# ==============================
-st.header('Análise Descritiva')
-st.write('Verifique a distribuição das variáveis e se há valores ausentes.')
+st.header("Análise Descritiva dos Dados")
+st.write("### Estatísticas gerais:")
+st.dataframe(df.describe(include="all").transpose())
 
-st.write('**Valores Nulos por Coluna:**')
-st.write(df.isnull().sum())
+st.write("### Valores nulos por coluna:")
+st.dataframe(df.isnull().sum())
 
-st.subheader("Estatísticas Gerais")
-st.dataframe(df.describe(include='all').transpose())
-
-# ==============================
-# 🔹 Visualização interativa
-# ==============================
-st.subheader("Gráficos de Análise Descritiva")
-
-if len(df) > 5000:
-    df_sample = df.sample(5000, random_state=42)
-else:
-    df_sample = df.copy()
+st.header("Visualização de Variáveis")
 
 coluna = st.selectbox("Escolha uma variável para visualizar:", df.columns)
 
 if df[coluna].dtype in ['int64', 'float64']:
     fig, ax = plt.subplots()
-    sns.histplot(df_sample[coluna], bins=30, kde=True, ax=ax)
+    sns.histplot(df[coluna], bins=30, kde=True, ax=ax)
     ax.set_title(f"Distribuição de {coluna}")
     st.pyplot(fig)
 
     fig, ax = plt.subplots()
-    sns.boxplot(x=df_sample[coluna], ax=ax)
+    sns.boxplot(x=df[coluna], ax=ax)
     ax.set_title(f"Boxplot de {coluna}")
     st.pyplot(fig)
 
 elif df[coluna].dtype == 'bool' or df[coluna].nunique() <= 10:
     fig, ax = plt.subplots()
-    df_sample[coluna].value_counts().plot(kind='bar', ax=ax)
+    df[coluna].value_counts().plot(kind="bar", ax=ax)
     ax.set_title(f"Frequência das categorias de {coluna}")
     st.pyplot(fig)
-
 else:
     top_n = st.slider("Número de categorias para exibir:", 5, 20, 10)
     fig, ax = plt.subplots()
-    df_sample[coluna].value_counts().head(top_n).plot(kind='bar', ax=ax)
+    df[coluna].value_counts().head(top_n).plot(kind="bar", ax=ax)
     ax.set_title(f"As {top_n} categorias mais frequentes de {coluna}")
     st.pyplot(fig)
 
-# ==============================
-# 🔹 Correlação
-# ==============================
-st.subheader(" Mapa de Correlação (variáveis numéricas)")
+
+st.header("Mapa de Correlação (variáveis numéricas)")
 corr = df.select_dtypes(include='number').corr()
+
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.heatmap(corr, cmap="coolwarm", annot=False)
 st.pyplot(fig)
 
-# ==============================
-# 🔹 Determinação do número de grupos
-# ==============================
-st.header(' Escolha do número de grupos (Método do Cotovelo)')
-
-X = df.select_dtypes(include=['float64', 'int64'])
+st.header("Padronização dos Dados")
+X = df.select_dtypes(include=['int64', 'float64'])
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
+st.write("As variáveis numéricas foram padronizadas com **StandardScaler** (média=0, desvio=1).")
 
-inertias = []
-k_values = range(2, 11)
-for k in k_values:
-    kmeans = KMeans(n_clusters=k, random_state=42, algorithm='lloyd')
+st.header("Escolha do Número Ideal de Clusters (Método do Cotovelo)")
+
+wcss = []
+for k in range(1, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42, algorithm="lloyd")
     kmeans.fit(X_scaled)
-    inertias.append(kmeans.inertia_)
+    wcss.append(kmeans.inertia_)
 
 fig, ax = plt.subplots()
-ax.plot(k_values, inertias, marker='o')
-ax.set_title("Método do Cotovelo (Elbow Method)")
+ax.plot(range(1, 11), wcss, marker='o')
 ax.set_xlabel("Número de clusters (k)")
 ax.set_ylabel("Inércia (WCSS)")
+ax.set_title("Método do Cotovelo")
 st.pyplot(fig)
 
-st.write("""
-🔹 **Interpretação:**  
-Escolha o valor de *k* onde a curva começa a se estabilizar — esse é o “cotovelo” e indica o número ideal de grupos.
-""")
+st.info("Observe o ponto onde a curva começa a diminuir lentamente — esse é o 'cotovelo', que indica um bom número de clusters.")
 
-# ==============================
-# 🔹 Clusterização e Avaliação
-# ==============================
-st.header("Avaliação dos Agrupamentos")
+st.header("Comparando soluções de agrupamento")
 
-k_escolhido = st.slider("Escolha o número de clusters (k):", 2, 10, 3)
+k_values = [3, 5]
+for k in k_values:
+    kmeans = KMeans(n_clusters=k, random_state=42, algorithm='lloyd')
+    df[f'cluster_{k}'] = kmeans.fit_predict(X_scaled)
+    st.subheader(f"Agrupamento com k = {k}")
+    st.dataframe(df.groupby(f'cluster_{k}')[['BounceRates', 'Revenue']].agg(['mean', 'count']))
 
-kmeans = KMeans(n_clusters=k_escolhido, random_state=42, algorithm='lloyd')
-labels = kmeans.fit_predict(X_scaled)
-df[f'cluster_{k_escolhido}'] = labels
+st.header("Aplicando K-Means com número de clusters escolhido")
 
-st.write(f"Médias das variáveis numéricas por grupo (k={k_escolhido})")
-medias = df.groupby(f'cluster_{k_escolhido}')[X.columns].mean().round(2)
-st.dataframe(medias)
+num_clusters = st.slider("Escolha o número de clusters:", 2, 10, 3)
+kmeans = KMeans(n_clusters=num_clusters, random_state=42, algorithm="lloyd")
+df["cluster_final"] = kmeans.fit_predict(X_scaled)
 
-colunas_numericas = list(X.columns)
-if len(colunas_numericas) >= 2:
-    xcol = st.selectbox("Eixo X do gráfico:", colunas_numericas, index=0)
-    ycol = st.selectbox("Eixo Y do gráfico:", colunas_numericas, index=1)
-    fig, ax = plt.subplots()
-    sns.scatterplot(
-        x=xcol, y=ycol, hue=f'cluster_{k_escolhido}',
-        data=df.sample(min(1000, len(df))), palette='tab10', ax=ax
-    )
-    ax.set_title(f"Distribuição dos clusters (k={k_escolhido})")
-    st.pyplot(fig)
+st.header("Nomeando os Clusters")
 
-# ==============================
-# 🔹 Avaliação dos Resultados
-# ==============================
-st.header("Avaliação dos Resultados (Variáveis fora do escopo)")
+cluster_names = {}
+for cluster_id in sorted(df["cluster_final"].unique()):
+    name = st.text_input(f"Nome para o cluster {cluster_id}:", f"Cluster {cluster_id}")
+    cluster_names[cluster_id] = name
 
-if 'Revenue' in df.columns and 'BounceRates' in df.columns:
-    analise = df.groupby(f'cluster_{k_escolhido}').agg({
-        'BounceRates': 'mean',
-        'Revenue': lambda x: x.mean() * 100
-    }).round(2)
-    analise.rename(columns={'Revenue': 'Taxa de Compra (%)'}, inplace=True)
+df["cluster_nomeado"] = df["cluster_final"].map(cluster_names)
 
-    st.subheader("Comparativo dos Grupos")
-    st.dataframe(analise)
+st.write("Visualização com nomes personalizados:")
+st.dataframe(df[["cluster_final", "cluster_nomeado", "BounceRates", "Revenue"]].head())
 
-    fig, ax = plt.subplots()
-    sns.barplot(x=analise.index, y='Taxa de Compra (%)',
-                data=analise, palette='viridis', ax=ax)
-    ax.set_title("Taxa de Compra (Revenue) por Grupo")
-    st.pyplot(fig)
+st.header("Avaliação Final dos Clusters")
+st.write("Comparando métricas de desempenho por grupo:")
 
-    fig, ax = plt.subplots()
-    sns.barplot(x=analise.index, y='BounceRates',
-                data=analise, palette='coolwarm', ax=ax)
-    ax.set_title("Bounce Rate médio por Grupo")
-    st.pyplot(fig)
+cluster_summary = df.groupby("cluster_nomeado")[["BounceRates", "Revenue"]].agg(["mean", "count"]).sort_values(by=("Revenue", "mean"), ascending=False)
+st.dataframe(cluster_summary)
 
-    grupo_top = analise['Taxa de Compra (%)'].idxmax()
-    st.success(
-        f"O grupo mais propenso à compra é o **Cluster {grupo_top}**, com taxa média de compra de {analise.loc[grupo_top, 'Taxa de Compra (%)']}%.")
-
-# ==============================
-# 🔹 Renomear os Clusters
-# ==============================
-st.header("Renomear os Clusters")
-
-st.write("Dê nomes aos clusters com base nas suas características observadas:")
-
-nomes_clusters = {}
-for i in sorted(df[f'cluster_{k_escolhido}'].unique()):
-    nome = st.text_input(f"Nome para o Cluster {i}:", f"Grupo {i}")
-    nomes_clusters[i] = nome
-
-df['Nome_Cluster'] = df[f'cluster_{k_escolhido}'].map(nomes_clusters)
-
-st.write("### Clusters com novos nomes:")
-st.dataframe(df[['Nome_Cluster', 'Revenue', 'BounceRates']].head())
-
-st.write("""
-**Exemplo de nomes:**
-- Cluster 0 → Visitantes Casuais  
-- Cluster 1 → Pesquisadores  
-- Cluster 2 → Clientes Engajados
-""")
+st.success("Grupo com maior média de Revenue representa clientes mais propensos à compra!")
